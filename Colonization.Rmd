@@ -1,0 +1,476 @@
+---
+title: "Colonization"
+output: html_notebook
+---
+
+This first command are used to clean-up the memory and start a new session
+```{r}
+rm(list = ls())
+dev.off()
+```
+
+Loading the required packages and importing the data
+```{r}
+library(readxl)
+library(stats) #statistical package
+library(MASS) #boxcox transformation
+
+library(multcompView)
+library(lsmeans)
+library(multcomp)
+library(ggplot2)
+library(psych)
+library(plyr)
+library(tidyverse)
+library(car)
+library(ggpubr)
+library(sandwich)
+
+library(dplyr) #summarized and grouped tables
+library(magrittr)
+
+library(lubridate) #required to not getcrazy with datas
+library(scales)
+
+#library(QTLRel)
+#importing the dataframe
+df <- read_excel("/Volumes/SGlab_Geier/GitHub/Colonization.xlsx")
+View(df) 
+```
+
+Converting column types
+```{r}
+df$day<-ymd(df$day)
+df$day_number<-as.factor(df$day_number)
+df$part<- as.factor(df$part)
+df$value <- as.numeric(as.character(df$value))
+```
+
+Normality test on each dataset
+```{r}
+shapiro.test(df$value[df$thesis == "1"])
+shapiro.test(df$value[df$thesis == "2"])
+shapiro.test(df$value[df$thesis == "3"])
+shapiro.test(df$value[df$thesis == "4"])
+shapiro.test(df$value[df$thesis == "5"])
+shapiro.test(df$value[df$thesis == "6"])
+shapiro.test(df$value[df$thesis == "7"])
+shapiro.test(df$value[df$thesis == "8"])
+shapiro.test(df$value[df$thesis == "9"])
+shapiro.test(df$value[df$thesis == "10"])
+shapiro.test(df$value[df$thesis == "11"])
+shapiro.test(df$value[df$thesis == "12"])
+shapiro.test(df$value[df$thesis == "13"])
+shapiro.test(df$value[df$thesis == "14"])
+shapiro.test(df$value[df$thesis == "15"])
+shapiro.test(df$value[df$thesis == "16"])
+shapiro.test(df$value[df$thesis == "17"])
+shapiro.test(df$value[df$thesis == "18"])
+shapiro.test(df$value[df$thesis == "19"])
+shapiro.test(df$value[df$thesis == "20"])
+shapiro.test(df$value[df$thesis == "21"])
+shapiro.test(df$value[df$thesis == "22"])
+shapiro.test(df$value[df$thesis == "23"])
+shapiro.test(df$value[df$thesis == "24"])
+shapiro.test(df$value[df$thesis == "25"])
+shapiro.test(df$value[df$thesis == "26"])
+shapiro.test(df$value[df$thesis == "27"])
+shapiro.test(df$value[df$thesis == "28"])
+
+```
+
+The data are not normal. Use BocCox transformation to put them back in line
+```{r}
+#generate a new dataframe to work on
+ds <- as.data.frame(df)
+
+#generate the model on the value dependig upon the sampling data (day) and the compartment (part) variables
+my_model<-lm(value ~ day * part, data=ds)
+bc1 <- boxcox(my_model, lambda= seq(-3,3), ploit=TRUE)
+#find the bestlambda value for thetransformation
+bes.lam<-bc1$x[which(bc1$y==max(bc1$y))]
+
+#generate the new model and plot it to be sure that it works
+fullmodel<-lm((ds$value)^bes.lam~day*part, data=ds)
+plot(fullmodel)
+
+#generate the new column with the normalized value in the original df
+df["norm"]<-df$value**bes.lam
+```
+
+Normality test on each dataset post transformation
+```{r}
+shapiro.test(df$value[df$thesis == "1"])
+shapiro.test(df$value[df$thesis == "2"])
+shapiro.test(df$value[df$thesis == "3"])
+shapiro.test(df$value[df$thesis == "4"])
+shapiro.test(df$value[df$thesis == "5"])
+shapiro.test(df$value[df$thesis == "6"])
+shapiro.test(df$value[df$thesis == "7"])
+shapiro.test(df$value[df$thesis == "8"])
+shapiro.test(df$value[df$thesis == "9"])
+shapiro.test(df$value[df$thesis == "10"])
+shapiro.test(df$value[df$thesis == "11"])
+shapiro.test(df$value[df$thesis == "12"])
+shapiro.test(df$value[df$thesis == "13"])
+shapiro.test(df$value[df$thesis == "14"])
+shapiro.test(df$value[df$thesis == "15"])
+shapiro.test(df$value[df$thesis == "16"])
+shapiro.test(df$value[df$thesis == "17"])
+shapiro.test(df$value[df$thesis == "18"])
+shapiro.test(df$value[df$thesis == "19"])
+shapiro.test(df$value[df$thesis == "20"])
+shapiro.test(df$value[df$thesis == "21"])
+shapiro.test(df$value[df$thesis == "22"])
+shapiro.test(df$value[df$thesis == "23"])
+shapiro.test(df$value[df$thesis == "24"])
+shapiro.test(df$value[df$thesis == "25"])
+shapiro.test(df$value[df$thesis == "26"])
+shapiro.test(df$value[df$thesis == "27"])
+shapiro.test(df$value[df$thesis == "28"])
+
+```
+
+Homoschedasticy test
+```{r}
+#we can decide wether to use Barlett's test or Levene's test. Barlett is extremely conservative, but I like Levene's better 
+leveneTest(norm~part, data=df)
+leveneTest(norm~day, data=df)
+
+```
+
+Now that the datas are normalized we proceed with the statistical analysis
+```{r}
+mod<-aov(norm~day*part, data=df)
+Anova(mod, type="III")
+summary(mod)
+marginal= lsmeans(mod, ~day*part)
+tuk.cld<-cld(marginal, alpha=.05, Letters=letters)
+
+```
+
+Graphs prerequisites
+```{r}
+#check that all the column are still in the right format
+str(df)
+
+#add the log column, that we will use to visualize the data
+df["Log"]<-log(df$value)
+
+#add the DPI column
+df["DPI"]<- "15DPI"
+df[df$day_number == 2 , "DPI"] <- "18 DPI"
+df[df$day_number == 3 , "DPI"] <- "22 DPI"
+df[df$day_number == 4 , "DPI"] <- "29 DPI"
+df[df$day_number == 5 , "DPI"] <- "36 DPI"
+df[df$day_number == 6 , "DPI"] <- "43 DPI"
+df[df$day_number == 7 , "DPI"] <- "57 DPI"
+
+#create a df (T) based on df (df) grouped by thesis (part*day). The result is visually no different than the original
+TS<-df%>%group_by(thesis)
+
+#create a summarized data table (SUM)
+SUM<-TS%>%summarise(day=first(day), day_number=first(day_number), DPI=first(DPI), part=first(part), Mean=mean(Log), Sem=sd(Log)/sqrt(length(Log)))
+```
+
+Graphs by compartment (part)
+```{r}
+#create column for dpi as factor (cond) 
+df$cond <- as.factor(df$DPI)
+
+#Generate the part subsets
+sA <- subset(df, part=="A") #apexes
+sPa <- subset(df, part=="Pa") #upper leaves
+sPb <- subset(df, part=="Pb") #lower leaves
+sR <- subset(df, part=="R") #roots
+
+#define the model for each subset (value ~ dpi variable, set in the condidtion)
+#ANOVA on the model
+mA<-lm(Log~cond, data=sA)
+mPa<-lm(Log~cond, data=sPa)
+mPb<-lm(Log~cond, data=sPb)
+mR<-lm(Log~cond, data=sR)
+
+Anova(mA, type="III")
+Anova(mPa, type="III")
+Anova(mPb, type="III")
+Anova(mR, type="III")
+
+summary(mA)
+summary(mPa)
+summary(mPb)
+summary(mR)
+
+
+#least square means of each model depending on the sampling day
+marginalA= lsmeans(mA, ~cond)
+marginalPa= lsmeans(mPa, ~cond)
+marginalPb= lsmeans(mPb, ~cond)
+marginalR= lsmeans(mR, ~cond)
+
+#show structure
+str(marginalA) 
+str(marginalPa)
+str(marginalPb)
+str(marginalR)
+
+#compact letters display
+#returns the statistical differences as letters
+tukA<-cld(marginalA, alpha=.05, Letters=letters)
+tukPa<-cld(marginalPa, alpha=.05, Letters=letters)
+tukPb<-cld(marginalPb, alpha=.05, Letters=letters)
+tukR<-cld(marginalR, alpha=.05, Letters=letters)
+
+#Order tuk results by cond (so by dpi) 
+tukA<-tukA[order(tukA$cond), ]
+tukPa<-tukPa[order(tukPa$cond), ]
+tukPb<-tukPb[order(tukPb$cond), ]
+tukR<-tukR[order(tukR$cond), ]
+
+#subsets of the summarized table (already ordered)
+ssA<-subset(SUM, part=="A") 
+ssPa<-subset(SUM, part=="Pa")
+ssPb<-subset(SUM, part=="Pb")
+ssR<-subset(SUM, part=="R")
+
+#now that both are ordered, move the column group in the subset 
+ssA["Lab"]<-tukA$.group
+ssPa["Lab"]<-tukPa$.group
+ssPb["Lab"]<-tukPb$.group
+ssR["Lab"]<-tukR$.group
+
+#Production of the graphs for each plant compartment in time
+#For the apex
+ggplot(ssA, aes(x=day, y=Mean, label=rownames(Lab))) +
+  geom_errorbar(aes(x=day, ymin=Mean-Sem, ymax=Mean+Sem), alpha=.9) +
+  geom_bar(position="dodge", stat="identity", color= "black", fill="light gray") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text.x=element_text(angle = 0)) +
+  scale_x_date(labels = date_format("%m/%d"), breaks = ssA$day)+
+  scale_y_continuous(breaks = seq(0, 18, 2))+
+  theme(legend.position = "none") +
+  geom_text(label=ssA$Lab, hjust = 0.5, nudge_y = 2.5) +
+  labs(x="DPI", y="Log(GU/ng)", title= "Apex")
+
+#For the upper leaves
+ggplot(ssPa, aes(x=day, y=Mean, label=rownames(Lab))) +
+  geom_errorbar(aes(x=day, ymin=Mean-Sem, ymax=Mean+Sem), alpha=.9) +
+  geom_bar(position="dodge", stat="identity", color= "black", fill="light gray") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text.x=element_text(angle = 0)) +
+  scale_x_date(labels = date_format("%m/%d"), breaks = ssPa$day)+
+  scale_y_continuous(breaks = seq(0, 18, 2))+
+  theme(legend.position = "none") +
+  geom_text(label=ssPa$Lab, hjust = 0.5, nudge_y = 2.5) +
+  labs(x="DPI", y="Log(GU/ng)", title= "Upper Leaves")
+
+#For the lower leaves
+ggplot(ssPb, aes(x=day, y=Mean, label=rownames(Lab))) +
+  geom_errorbar(aes(x=day, ymin=Mean-Sem, ymax=Mean+Sem), alpha=.9) +
+  geom_bar(position="dodge", stat="identity", color= "black", fill="light gray") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text.x=element_text(angle = 0)) +
+  scale_x_date(labels = date_format("%m/%d"), breaks = ssPb$day)+
+  scale_y_continuous(breaks = seq(0, 18, 2))+
+  theme(legend.position = "none") +
+  geom_text(label=ssPb$Lab, hjust = 0.5, nudge_y = 2.5) +
+  labs(x="DPI", y="Log(GU/ng)", title= "Lower Leaves")
+
+#For the roots
+ggplot(ssR, aes(x=day, y=Mean, label=rownames(Lab))) +
+  geom_errorbar(aes(x=day, ymin=Mean-Sem, ymax=Mean+Sem), alpha=.9) +
+  geom_bar(position="dodge", stat="identity", color= "black", fill="light gray") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text.x=element_text(angle = 0)) +
+  scale_x_date(labels = date_format("%m/%d"), breaks = ssR$day)+
+  scale_y_continuous(breaks = seq(0, 18, 2))+
+  theme(legend.position = "none") +
+  geom_text(label=ssR$Lab, hjust = 0.5, nudge_y = 2.5) +
+  labs(x="DPI", y="Log(GU/ng)", title= "Roots")
+```
+
+Graphs by sampling (dpi)
+```{r}
+#create the column for plant compartment as a factor (cond)
+SUM$cond=as.factor(SUM$part)
+
+#Generate the sampling date subsets
+st1<-subset(df, day_number=="1")
+st2<-subset(df, day_number=="2")
+st3<-subset(df, day_number=="3")
+st4<-subset(df, day_number=="4")
+st5<-subset(df, day_number=="5")
+st6<-subset(df, day_number=="6")
+st7<-subset(df, day_number=="7")
+
+st1$cond<-st1$part
+st2$cond<-st2$part
+st3$cond<-st3$part
+st4$cond<-st4$part
+st5$cond<-st5$part
+st6$cond<-st6$part
+st7$cond<-st7$part
+
+#define the model for each subset (value ~ dpi variable, set in the condidtion)
+#ANOVA on the model
+mod1<-lm(Log~part, data=st1)
+mod2<-lm(Log~part, data=st2)
+mod3<-lm(Log~part, data=st3)
+mod4<-lm(Log~part, data=st4)
+mod5<-lm(Log~part, data=st5)
+mod6<-lm(Log~part, data=st6)
+mod7<-lm(Log~part, data=st7)
+
+Anova(mod1, type="III")
+Anova(mod2, type="III")
+Anova(mod3, type="III")
+Anova(mod4, type="III")
+Anova(mod5, type="III")
+Anova(mod6, type="III")
+Anova(mod7, type="III")
+
+summary(mod1)
+summary(mod2)
+summary(mod3)
+summary(mod4)
+summary(mod5)
+summary(mod6)
+summary(mod7)
+
+#least square means of each model depending on the plant compartment
+marginal1= lsmeans(mod1, ~part)
+marginal2= lsmeans(mod2, ~part)
+marginal3= lsmeans(mod3, ~part)
+marginal4= lsmeans(mod4, ~part)
+marginal5= lsmeans(mod5, ~part)
+marginal6= lsmeans(mod6, ~part)
+marginal7= lsmeans(mod7, ~part)
+
+#compact letters display
+#returns the statistical differences as letters
+tuk1<-cld(marginal1, alpha=.05, Letters=letters)
+tuk2<-cld(marginal2, alpha=.05, Letters=letters)
+tuk3<-cld(marginal3, alpha=.05, Letters=letters)
+tuk4<-cld(marginal4, alpha=.05, Letters=letters)
+tuk5<-cld(marginal5, alpha=.05, Letters=letters)
+tuk6<-cld(marginal6, alpha=.05, Letters=letters)
+tuk7<-cld(marginal7, alpha=.05, Letters=letters)
+
+#Order tuk results by compartment
+tuk1<-tuk1[order(tuk1$part), ]
+tuk2<-tuk2[order(tuk2$part), ]
+tuk3<-tuk3[order(tuk3$part), ]
+tuk4<-tuk4[order(tuk4$part), ]
+tuk5<-tuk5[order(tuk5$part), ]
+tuk6<-tuk6[order(tuk6$part), ]
+tuk7<-tuk7[order(tuk7$part), ]
+
+#subsets of the summarized table (already ordered)
+ss1<-subset(SUM, day_number=="1")
+ss2<-subset(SUM, day_number=="2")
+ss3<-subset(SUM, day_number=="3")
+ss4<-subset(SUM, day_number=="4")
+ss5<-subset(SUM, day_number=="5")
+ss6<-subset(SUM, day_number=="6")
+ss7<-subset(SUM, day_number=="7")
+
+#now that both are ordered, move the column group in the subset 
+ss1["Lab"]<-tuk1$.group
+ss2["Lab"]<-tuk2$.group
+ss3["Lab"]<-tuk3$.group
+ss4["Lab"]<-tuk4$.group
+ss5["Lab"]<-tuk5$.group
+ss6["Lab"]<-tuk6$.group
+ss7["Lab"]<-tuk7$.group
+
+#Production of the graphs for each sampling date
+#15DPI
+ggplot(ss1, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "15 DPI") +
+  geom_text(label=ss1$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+#18DPI
+ggplot(ss2, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "18 DPI") +
+  geom_text(label=ss2$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none")+
+  ylim(0,19)
+
+#22DPI
+ggplot(ss3, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "22 DPI") +
+  geom_text(label=ss3$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+#29DPI
+ggplot(ss4, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "29 DPI") +
+  geom_text(label=ss4$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+#36DPI
+ggplot(ss5, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "36 DPI") +
+  geom_text(label=ss5$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+#43DPI
+ggplot(ss6, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "43 DPI") +
+  geom_text(label=ss6$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+#57DPI
+ggplot(ss7, aes(x=part, y=Mean, fill=cond, label=rownames(Lab))) +
+  geom_errorbar(aes(x=part, ymin=Mean-Sem, ymax=Mean+Sem), position = "dodge", alpha=.7) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Plant Compartment", y="Log (GU/ng)", title= "57 DPI") +
+  geom_text(label=ss7$Lab, hjust = 0.5, nudge_y = 2.0) +
+  scale_fill_grey(start=0.8, end=0.2)+
+  scale_x_discrete(labels = c("Apex", "Upper Leaves", "Lower Leaves", "Roots"))+
+  theme_light() +
+  theme(legend.position = "none") +
+  ylim(0,19)
+
+
+```
